@@ -43,13 +43,14 @@ from fpga_lib import *
 from dbg import *
 
 DV_ROOT = os.environ['DV_ROOT']
-MODEL_DIR = os.environ['MODEL_DIR']
 DESIGN_BLOCK_LIST = os.path.join(DV_ROOT, "tools/src/proto/block.list")
 BOARD_TOOL_LIST = os.path.join(DV_ROOT, "tools/src/proto/board.list")
 PROJECT_BUILD_LOG = "make_project.log"
 PROJECT_IMPL_LOG = "implementation.log"
 
 FLOW_STEP_OPTIONS = ["project", "impl"]
+
+
 
 def usage():
     print(file=sys.stderr)
@@ -64,6 +65,9 @@ def usage():
     print("                  genesys2", file=sys.stderr)
     print("                  nexysVideo", file=sys.stderr)
     print("                  f1", file=sys.stderr)
+    print("         -p, --path <subdirectory path under build>", file=sys.stderr)
+    print("              This option creates the project under the $MODEL_DIR/path. If not", file=sys.stderr)
+    print("              specified, current git revision will be used", file=sys.stderr)
     print("\n       -d, --design <design>", file=sys.stderr)
     print("              Name of design module to synthesize.  The default is 'system', which", file=sys.stderr)
     print("              synthesizes a full system with chip and chipset. See", file=sys.stderr)
@@ -439,10 +443,12 @@ def checkCmdOptions(options):
 
     return design_data
 
+
 def setParserOptions(parser):
     parser.add_option("-b", "--board", dest="board", action="store")
     parser.add_option("-d", "--design", dest="design", action="store", default="system")
     parser.add_option("-c", "--core", dest="core", action="store", default="sparc")
+    parser.add_option("-p", "--path", dest="path", action="store", default=subprocess.run(['git', 'rev-parse', 'HEAD'], stdout=subprocess.PIPE).stdout.decode('utf-8').rstrip())
     parser.add_option("--network_config", dest="network_config", action="store", default="2dmesh_config")
     parser.add_option("--x_tiles", dest="x_tiles", action="store", default=1)
     parser.add_option("--y_tiles", dest="y_tiles", action="store", default=1)
@@ -605,14 +611,13 @@ def makeDefList(options):
 
     return defines
 
-def makeMemMapping(st_brd, work_dir, log_dir):
+def makeMemMapping(build_dir, st_brd, work_dir, log_dir):
     prev_dir = os.getcwd()
 
     os.chdir(work_dir)
     print_info("Starting mapping of a test to %s" % st_brd.storage.upper())
     make_mem_map.makeMapping(st_brd)
-    # These are always in MODEL_DIR
-    os.chdir(MODEL_DIR)
+    os.chdir(build_dir)
 
     test_proto_dir = os.path.join(DV_ROOT, "design/chipset/io_ctrl/xilinx/common/ip_cores/bram_256x512/")
     os.system('mv test_proto.coe %s' % test_proto_dir)
@@ -643,6 +648,8 @@ def main():
     parser = setParserOptions(parser)
     (options, args) = parser.parse_args()
 
+    proto_build_path = os.path.join(os.environ['MODEL_DIR'], options.path)
+
     exit_code = 0
     design_data = checkCmdOptions(options)
 
@@ -650,7 +657,7 @@ def main():
     # All options are considered valid from this point
     ###################################################
 
-    rc_dir = ProtoDir(options.board, options.design, design_data)
+    rc_dir = ProtoDir( proto_build_path ,options.board, options.design, design_data)
 
     # Make a list of configuration specific defines
     defines = makeDefList(options)
@@ -693,7 +700,9 @@ def main():
     # Setting directory structure
     ##################################
     prev_dir = os.getcwd()
-    os.chdir(MODEL_DIR)
+    if not os.path.isdir(proto_build_path):
+        os.mkdir(proto_build_path)
+    os.chdir(proto_build_path)
     os.system('mkdir -p %s' % rc_dir.log)
 
     ##################################
@@ -869,7 +878,7 @@ def main():
         else:
             strg_type = options.uart_dmw
         st_brd = StorageBoard(strg_type, options.board)
-        makeMemMapping(st_brd, rc_dir.work, rc_dir.log)
+        makeMemMapping(proto_build_path, st_brd, rc_dir.work, rc_dir.log)
 
     ################################################
     # Generate UART init sequence for ASM tests
@@ -924,7 +933,7 @@ def main():
             print_info("Waiting for jobs to finish...")
             waitSlurmJobs(dep_list)
         else:
-            print_info("Run 'protocheck -b %s -d %s' after jobs are finished to check results" % (options.board, options.design))
+            print_info("Run 'protocheck -b %s -d %s -p %s' after jobs are finished to check results" % (options.board, options.design, options.path))
 
     # Check  implementation results
     if (options.slurm and options.swait) or (not options.slurm):
