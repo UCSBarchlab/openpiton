@@ -42,7 +42,6 @@ import dbg
 PROJECT_BUILD_LOG = "make_project.log"
 PROJECT_IMPL_LOG = "implementation.log"
 DV_ROOT = os.environ['DV_ROOT']
-MODEL_DIR = os.environ['MODEL_DIR']
 DESIGN_BLOCK_LIST = os.path.join(DV_ROOT, "tools/src/proto/block.list")
 MAP_MODULE_NAME = "storage_addr_trans.v"
 NOC_PAYLOAD_WIDTH = 512
@@ -143,8 +142,8 @@ class StorageBoard:
         self.board = board
 
 class ProtoDir:
-    def __init__(self, board, design, design_data):
-        self.board = os.path.join(MODEL_DIR, board)
+    def __init__(self, build_dir, board, design, design_data):
+        self.board = os.path.join(build_dir, board)
         self.work = os.path.join(self.board, design_data["ID"])
         self.log = os.path.join(self.work, "protosyn_logs")
         proj_name = board + "_" + design

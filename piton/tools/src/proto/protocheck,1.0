@@ -28,6 +28,8 @@ from optparse import OptionParser
 import fpga_lib as flib
 import dbg
 import sys
+import os
+import subprocess
 
 def checkCmdOptions(options):
 
@@ -70,7 +72,10 @@ def main():
     parser = OptionParser()
     parser.add_option("-b", "--board", dest="board", action="store")
     parser.add_option("-d", "--design", dest="design", action="store")
+    parser.add_option("-p", "--path", dest="path", action="store", default=subprocess.run(['git', 'rev-parse', 'HEAD'], stdout=subprocess.PIPE).stdout.decode('utf-8').rstrip())
     (options, args) = parser.parse_args()
+
+    build_path = os.path.join(os.environ['MODEL_DIR'], options.path)
 
     if not checkCmdOptions(options):
         parser.print_help()
@@ -78,7 +83,7 @@ def main():
 
     design_data = flib.find_design_block(options.design)
 
-    rc_dir = flib.ProtoDir(options.board, options.design, design_data)
+    rc_dir = flib.ProtoDir(build_path, options.board, options.design, design_data)
 
     # Checking Results
     rv = checkResult(rc_dir)
